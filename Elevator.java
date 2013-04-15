@@ -1,5 +1,4 @@
-import java.util.LinkedList;
-import java.util.Collections;
+
 import java.util.PriorityQueue;
 class Elevator {
     private Disk disk;
@@ -8,10 +7,10 @@ class Elevator {
     private static int index = 0;
     private static Request currentRequest = null;
     public static boolean increasing = true,busy = false;
-    private LinkedList<Request> requests;
+    private static PriorityQueue<Request> requests;
     public Elevator(Disk d) {
         disk = d;
-        requests = new LinkedList<Request>();
+        requests = new PriorityQueue<Request>();
     }
     
     private synchronized void await() {
@@ -20,77 +19,45 @@ class Elevator {
     
     public int read(int blockNumber,byte[] buffer) {
         Request r = new Request(READ,blockNumber,buffer);
-        if (busy) {
-            requests.addLast(r);
-        } else {
-            busy = true;
-            currentRequest = r;
-            currentRequest.process();
-            currentRequest.await();
-        }
+        requests.offer(r);
+        if (!busy) process();
+        else await();
         return 0;
     }
     
     public int write(int blockNumber,byte[] buffer) {
         Request r = new Request(WRITE,blockNumber,buffer);
-        requests.addLast(r);
-        while(busy);
-        currentRequest = requests.removeFirst();
-        currentRequest.process();
-        currentRequest.await();
-        
+        requests.offer(r);
+        if (!busy) process();
+        else await();
         return 0;
+    }
+    
+    public void process() {
+        busy = true;
+        Request r = requests.peek();
+        Library.output(requests.size()+"PRocessing "+r+"\n");
+        
+        
+        r.process();
+        r.await();
     }
     
     public synchronized int endIO() {
-        currentRequest.finish();
         if (requests.isEmpty()) {
-            Library.output("Empty\n");
-            currentRequest = null;
             busy = false;
-        }
-        else {
-            currentRequest = requests.removeFirst();
-            Library.output(currentRequest+"\n");
-            currentRequest.process();
-            currentRequest.await();
+            increasing = !increasing;
+        } else {
+            Request r = requests.poll();
+            Library.output("Finishing "+r+"\n");
+            r.finish();
         }
         notifyAll();
         return 0;
-        /*notifyAll();
-        Library.output("Ending");
-        Library.output("Closing request " + currentRequest + "\n");
-        currentRequest.finish();
-        requests.remove(currentRequest);
-            
-        
-        Request pointer = requests.getFirst();
-        int minDiff = pointer.compareTo(currentRequest);
-        boolean negative = true;
-        Library.output(""+requests.size());
-        for (Request r : requests) {
-            Library.output("-");
-            int diff = increasing ? r.compareTo(currentRequest) :
-                                        currentRequest.compareTo(r);
-            Library.output(""+diff);
-            negative &= diff < 0;
-            if (diff > 0 && diff < minDiff) {
-                minDiff = diff;
-                pointer = r;
-            }
-        }
-        
-        if (negative) {
-            Library.output("Negative\n\n");
-            increasing = !increasing;
-        }
-        
-        
-        Library.output("Choosing request " + currentRequest + "\n");
-        return 0;*/
     }
     
     public void flush() {
+        while (!requests.isEmpty()) process();
         disk.flush();
     }
 
@@ -111,12 +78,14 @@ class Elevator {
             }
         }
 
-        protected synchronized void process() {
+        protected void process() {
+            Elevator.busy = true;
             if (type == READ) disk.beginRead(blockNumber,buffer);
             else if (type == WRITE) disk.beginWrite(blockNumber,buffer);
 	}
 
         protected synchronized void finish() {
+            Elevator.busy = false;
             notify();
         } 
         
@@ -133,11 +102,7 @@ class Elevator {
         }
         
         public int compareTo(Object o) {
-            return blockNumber;/*
-            int diff = Elevator.index - ((Request)o).blockNumber();
-            if (diff < 0) return Integer.MAX_VALUE;
-            return diff;
-            * */
+            return ((Request)o).blockNumber - blockNumber;
         }
         
         public String toString() {

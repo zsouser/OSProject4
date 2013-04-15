@@ -93,7 +93,7 @@ public class Library {
 	}
 
 	public static int getDiskBlockCount() {
-		return Kernel.interrupt(Kernel.INTERRUPT_DISK, Kernel.SYSCALL_GET_DISK_SIZE, 0, null, null, null);
+		return Kernel.interrupt(Kernel.INTERRUPT_USER, Kernel.SYSCALL_GET_DISK_SIZE, 0, null, null, null);
 	}
 
 	public static int getDiskBlockSize() {
@@ -102,13 +102,17 @@ public class Library {
 
 	public static int readDiskBlock(int blockNumber, byte data[]) {
             Library.output("Library: reading block "+ blockNumber+"\n");
-            return Kernel.interrupt(Kernel.INTERRUPT_DISK, Kernel.SYSCALL_READ, blockNumber, null, null, data);
+            return Kernel.interrupt(Kernel.INTERRUPT_USER, Kernel.SYSCALL_READ, blockNumber, null, null, data);
             
 	}
 
 	public static int writeDiskBlock(int blockNumber, byte data[]) {
             Library.output("Library: writing block "+ blockNumber+"\n");
-            return Kernel.interrupt(Kernel.INTERRUPT_DISK, Kernel.SYSCALL_WRITE, blockNumber, null, null, data);
+            return Kernel.interrupt(Kernel.INTERRUPT_USER, Kernel.SYSCALL_WRITE, blockNumber, null, null, data);
             
 	}
+        
+        public static int getDiskBufferSize() {
+            return Kernel.interrupt(Kernel.INTERRUPT_USER, Kernel.SYSCALL_GET_BUFFER_SIZE,0,null,null,null);
+        }
 } // Library

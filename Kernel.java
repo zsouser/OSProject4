@@ -101,6 +101,8 @@ public class Kernel {
     
     public static final int SYSCALL_GET_DISK_SIZE = 8;
     
+    public static final int SYSCALL_GET_BUFFER_SIZE = 9;
+    
     
     //////////////// Error codes returned by interrupt()
 
@@ -219,30 +221,26 @@ public class Kernel {
                     return doJoin(i2);
 					
                 case SYSCALL_GET_TIME:
-					return doGetTime((long[])o1);
+                    return doGetTime((long[])o1);
+                case SYSCALL_READ:
+                        return doRead(i2,a);
+                    
+                case SYSCALL_WRITE:
+                    return doWrite(i2,a);
+                
+                case SYSCALL_GET_DISK_SIZE:
+                    return doGetDiskSize();  
+                    
+                case SYSCALL_GET_BUFFER_SIZE:
+                    return doGetBufferSize();
 
                 default:
                     return ERROR_BAD_ARGUMENT;
                 }
 
             case INTERRUPT_DISK:
-                switch (i1) {
-                    case SYSCALL_READ:
-                        return doRead(i2,a);
-                    
-                    case SYSCALL_WRITE:
-                        return doWrite(i2,a);
-                    
-                    case SYSCALL_END_IO:
-                    case 0:
-                        return doEndIO();
-                    
-                    case SYSCALL_GET_DISK_SIZE:
-                        return doGetDiskSize();
-                        
-                    default:
-                        return ERROR_BAD_ARGUMENT;
-                }
+                doEndIO();
+                break;
 
             case INTERRUPT_POWER_ON:
                 doPowerOn(i1, o1, o2);
@@ -285,6 +283,11 @@ public class Kernel {
         t[0] = System.currentTimeMillis();
             return 0;
     }
+    
+    private static int doGetBufferSize() {
+        return cacheSize;
+    }
+    
 
     /** Performs the actions associated with a POWER_ON interrupt.
      * @param i1 the first int parameter to the interrupt (the disk cache size)
