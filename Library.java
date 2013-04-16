@@ -112,7 +112,7 @@ public class Library {
             
 	}
         
-        public static int getDiskBufferSize() {
+        public static int getDiskCacheSize() {
             return Kernel.interrupt(Kernel.INTERRUPT_USER, Kernel.SYSCALL_GET_BUFFER_SIZE,0,null,null,null);
         }
 } // Library

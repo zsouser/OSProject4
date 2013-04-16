@@ -1,112 +1,187 @@
 
-import java.util.PriorityQueue;
-class Elevator {
-    private Disk disk;
-    private static int WRITE = 1;
-    private static int READ = 0;
-    private static int index = 0;
-    private static Request currentRequest = null;
-    public static boolean increasing = true,busy = false;
-    private static PriorityQueue<Request> requests;
-    public Elevator(Disk d) {
-        disk = d;
-        requests = new PriorityQueue<Request>();
-    }
-    
-    private synchronized void await() {
-        try { wait(); } catch (Exception e) { } 
-    }
-    
-    public int read(int blockNumber,byte[] buffer) {
-        Request r = new Request(READ,blockNumber,buffer);
-        requests.offer(r);
-        if (!busy) process();
-        else await();
-        return 0;
-    }
-    
-    public int write(int blockNumber,byte[] buffer) {
-        Request r = new Request(WRITE,blockNumber,buffer);
-        requests.offer(r);
-        if (!busy) process();
-        else await();
-        return 0;
-    }
-    
-    public void process() {
-        busy = true;
-        Request r = requests.peek();
-        Library.output(requests.size()+"PRocessing "+r+"\n");
-        
-        
-        r.process();
-        r.await();
-    }
-    
-    public synchronized int endIO() {
-        if (requests.isEmpty()) {
-            busy = false;
-            increasing = !increasing;
-        } else {
-            Request r = requests.poll();
-            Library.output("Finishing "+r+"\n");
-            r.finish();
-        }
-        notifyAll();
-        return 0;
-    }
-    
-    public void flush() {
-        while (!requests.isEmpty()) process();
-        disk.flush();
-    }
+import java.util.ArrayList;
 
-    private class Request implements Comparable {
-        private int type;
-        private int blockNumber;
-        private byte[] buffer;
-        public Request(int type, int blockNumber, byte[] buffer) {
-            this.type = type;
-            this.blockNumber = blockNumber;
-            this.buffer = buffer;
+/**
+ * Elevator Class
+ * @author Zach Souser
+ * @author Alan Peters
+ * CS 3600
+ */
+public class Elevator {
+    
+    /**
+     * The Disk object
+     */
+    
+    private Disk disk;
+    
+    /**
+     * The current and last requests
+     */
+    
+    private Request currentRequest, lastRequest;
+    
+    /**
+     * The queue of requests, in an ArrayList
+     */
+    
+    private ArrayList<Request> requests;
+    
+    /**
+     * Constructor
+     * @param disk 
+     */
+    
+    public Elevator(Disk disk){
+        this.disk = disk;
+        lastRequest = new Request(0, new byte[6], false);
+        requests = new ArrayList();
+    }
+    
+    /**
+     * Read operation
+     * @param blockNumber
+     * @param buffer
+     * @return 
+     */
+    
+    public int read(int blockNumber, byte[] buffer){
+        Request newRequest = new Request(blockNumber,buffer,false);
+        addToList(newRequest);
+        process();
+        newRequest.await();
+        return 0;
+    }
+    
+    /**
+     * Process the next disk IO operation
+     * @return true for success, false for failure
+     */
+    
+    private synchronized boolean process(){
+        if(currentRequest != null || requests.isEmpty()){
+            return false;
         }
-        
-        protected synchronized void await() {
-            try { wait(); }
-            catch (java.lang.InterruptedException e) {
-                Library.output("Could not wait");
+        currentRequest = requests.remove(0);
+        for(int i = 0; i < requests.size(); i++){
+            if(Math.abs(requests.get(i).blockNumber - lastRequest.blockNumber) < Math.abs(currentRequest.blockNumber - lastRequest.blockNumber)){
+                requests.add(currentRequest);
+                currentRequest = requests.remove(i);
             }
         }
-
-        protected void process() {
-            Elevator.busy = true;
-            if (type == READ) disk.beginRead(blockNumber,buffer);
-            else if (type == WRITE) disk.beginWrite(blockNumber,buffer);
-	}
-
-        protected synchronized void finish() {
-            Elevator.busy = false;
+        if(currentRequest.isWrite){
+            Library.output("Start Write");
+            disk.beginWrite(currentRequest.blockNumber, currentRequest.buffer);
+        }else {
+            Library.output("Start Read");
+            disk.beginRead(currentRequest.blockNumber, currentRequest.buffer);
+        }
+        return true;
+    }
+    
+    /**
+     * Safely add a request to the list.
+     * @param r 
+     */
+    private synchronized void addToList(Request r){
+        requests.add(r);
+    }
+    
+    /**
+     * Write operation
+     * @param blockNumber
+     * @param buffer
+     * @return 
+     */
+    
+    public int write(int blockNumber, byte[] buffer){
+        Request newRequest = new Request(blockNumber,buffer,true);
+        addToList(newRequest);
+        process();
+        newRequest.await();
+        return 0;
+    }
+    
+    /**
+     * End the IO operation safely
+     * @return 
+     */
+    public synchronized int endIO(){
+        Library.output("End IO\n");
+        currentRequest.finish();
+        lastRequest = currentRequest;
+        currentRequest = null;
+        process();
+        return 0;
+    }
+    
+    /**
+     * Flush on shutdown
+     */
+    
+    public void flush() {
+        Library.output("Flush");
+        while(!requests.isEmpty()){
+            process();
+        }
+        while(currentRequest != null);
+        disk.flush();
+    }
+    
+    /** 
+     * Class Request
+     */
+    
+    private class Request{
+        
+        /**
+         * Block Number
+         */
+        
+        public int blockNumber;
+        
+        /**
+         * Buffer contents
+         */
+        
+        public byte[] buffer;
+        
+        /**
+         * Whether the operation is a read or a write
+         */
+        
+        public boolean isWrite;
+        
+        /**
+         * Constructor for Request
+         * @param blockNumber
+         * @param buffer
+         * @param isWrite 
+         */
+        
+        public Request(int blockNumber, byte[] buffer, boolean isWrite){
+            this.blockNumber = blockNumber;
+            this.buffer = buffer;
+            this.isWrite = isWrite;
+        }
+        
+        /**
+         * Await the interrupt
+         */
+        
+        public synchronized void await(){
+            try{ 
+                wait(); 
+            }catch(Exception e){
+            }
+        }
+        
+        /**
+         * Receive the interrupt
+         */
+        
+        public synchronized void finish () {
             notify();
-        } 
-        
-        protected int type() {
-            return type;
-        }
-        
-        protected int blockNumber() { 
-            return blockNumber;
-        }
-        
-        protected byte[] buffer() {
-            return buffer;
-        }
-        
-        public int compareTo(Object o) {
-            return ((Request)o).blockNumber - blockNumber;
-        }
-        
-        public String toString() {
-            return "("+type+","+blockNumber+")";
         }
     }
 }

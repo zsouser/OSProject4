@@ -168,7 +168,7 @@ public class Disk implements Runnable {
      * @param targetBlock the block number to which we have to seek.
      */
     protected void delay(int targetBlock) {
-        int sleepTime = 100 + Math.abs(targetBlock - currentBlock) / 5;
+        int sleepTime = 10 + Math.abs(targetBlock - currentBlock) / 5;
         try {
             Thread.sleep(sleepTime);
         } catch (Exception e) {
